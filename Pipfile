@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = ">=2.3,<4"
+flask-migrate = ">=4,<5"
+flask-sqlalchemy = ">=3.0,<4"
+marshmallow = ">=3.20,<5"
+
+[dev-packages]
+pytest = ">=7,<9"
+
+[requires]
+python_version = "3.8"
