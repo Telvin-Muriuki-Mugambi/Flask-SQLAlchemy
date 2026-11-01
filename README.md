@@ -35,6 +35,28 @@ pipenv run flask --app server.app run --port 5555
 
 The API is available at `http://127.0.0.1:5555`.
 
+## Interactive CLI
+
+Start the API in one terminal, then launch the interactive CLI from the
+repository root in another:
+
+```bash
+pipenv run python -m server.cli
+```
+
+The CLI guides you through listing, viewing, creating, and deleting workouts
+and exercises, and adding exercises to workouts with either sets and reps or a
+duration. It shows available records before asking you to select one and asks
+for confirmation before deletion. API validation messages are shown in the
+terminal.
+
+To connect to an API running at a different address, set `WORKOUT_API_URL` or
+pass `--base-url`:
+
+```bash
+pipenv run python -m server.cli --base-url http://127.0.0.1:5555
+```
+
 ## Endpoints
 
 | Method | Path | Description |
