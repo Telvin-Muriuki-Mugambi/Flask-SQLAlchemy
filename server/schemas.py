@@ -1,9 +1,51 @@
-from marshmallow import RAISE, Schema, ValidationError, fields, validates, validates_schema
+import re
+
+from marshmallow import (
+    RAISE,
+    Schema,
+    ValidationError,
+    fields,
+    validates,
+    validates_schema,
+)
 
 
 class RequestSchema(Schema):
     class Meta:
         unknown = RAISE
+
+
+class CredentialsSchema(RequestSchema):
+    username = fields.String(required=True)
+    password = fields.String(required=True)
+
+    @validates("username")
+    def validate_username(self, value, **_kwargs):
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{3,80}", value.strip()):
+            raise ValidationError(
+                "Username must be 3 to 80 characters using letters, numbers, '.', "
+                "'_' or '-'."
+            )
+
+    @validates("password")
+    def validate_password(self, value, **_kwargs):
+        if len(value) > 128:
+            raise ValidationError("Password must be at most 128 characters.")
+
+
+class RegistrationSchema(CredentialsSchema):
+    @validates("password")
+    def validate_registration_password(self, value, **_kwargs):
+        if len(value) < 12:
+            raise ValidationError("Password must be at least 12 characters.")
+        if len(value) > 128:
+            raise ValidationError("Password must be at most 128 characters.")
+
+
+class UserSchema(RequestSchema):
+    id = fields.Int(dump_only=True)
+    username = fields.String(dump_only=True)
+    role = fields.String(dump_only=True)
 
 
 class WorkoutExerciseSchema(RequestSchema):

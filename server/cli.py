@@ -1,6 +1,7 @@
 """Interactive terminal client for the workout tracking API."""
 
 import argparse
+from getpass import getpass
 import json
 import os
 from urllib.error import HTTPError, URLError
@@ -29,6 +30,7 @@ class ApiClient:
     def __init__(self, base_url=DEFAULT_API_URL, transport=None):
         self.base_url = base_url.rstrip("/")
         self.transport = transport or self._send_request
+        self.access_token = None
 
     def request(self, method, path, payload=None):
         status_code, body = self.transport(method, path, payload)
@@ -36,12 +38,30 @@ class ApiClient:
             raise ApiError(status_code, body)
         return body
 
+    def login(self, username, password):
+        response = self.request(
+            "POST",
+            "/auth/login",
+            {"username": username, "password": password},
+        )
+        self.access_token = response["access_token"]
+
+    def register(self, username, password):
+        return self.request(
+            "POST",
+            "/auth/register",
+            {"username": username, "password": password},
+        )
+
     def _send_request(self, method, path, payload):
         body = json.dumps(payload).encode("utf-8") if payload is not None else None
+        headers = {"Content-Type": "application/json"}
+        if self.access_token:
+            headers["Authorization"] = f"Bearer {self.access_token}"
         request = Request(
             f"{self.base_url}{path}",
             data=body,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method=method,
         )
         try:
@@ -298,7 +318,24 @@ def main():
     )
     args = parser.parse_args()
     try:
-        run_cli(ApiClient(args.base_url))
+        api = ApiClient(args.base_url)
+        print("1. Log in")
+        print("2. Sign up")
+        action = input("Choose an option: ").strip()
+        if action not in {"1", "2"}:
+            print("Choose 1 to log in or 2 to sign up.")
+            return
+        username = input("Username: ").strip()
+        password = getpass("Password: ")
+        if action == "2":
+            api.register(username, password)
+            print("Account created. Logging in...")
+        api.login(username, password)
+        run_cli(api)
+    except ApiError as error:
+        print(f"API error ({error.status_code}): {error}")
+    except ConnectionError as error:
+        print(str(error))
     except (EOFError, KeyboardInterrupt):
         print("\nGoodbye!")
 
