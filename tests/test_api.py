@@ -3,6 +3,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from server.app import app
+from server.cli import ApiClient, run_cli
 from server.models import Exercise, Workout, db
 
 
@@ -104,3 +105,51 @@ def test_database_constraint_rejects_partial_prescription(client):
             )
             db.session.commit()
         db.session.rollback()
+
+
+def test_cli_creates_and_maps_workout_exercise_relationship(client):
+    answers = iter(
+        [
+            "3", "Strength day", "Beginner session",
+            "7", "Squat", "Legs", "",
+            "9", "1", "1", "1", "3", "10",
+            "2", "1",
+            "0",
+        ]
+    )
+    output = []
+
+    def transport(method, path, payload):
+        response = client.open(path, method=method, json=payload)
+        return response.status_code, response.get_json()
+
+    run_cli(
+        api=ApiClient(transport=transport),
+        input_fn=lambda _prompt: next(answers),
+        output_fn=output.append,
+    )
+
+    workout = client.get("/workouts/1").json
+    assert workout["name"] == "Strength day"
+    assert workout["workout_exercises"][0]["exercise"]["name"] == "Squat"
+    assert workout["workout_exercises"][0]["sets"] == 3
+    assert any("Squat (Legs): 3 sets x 10 reps" in line for line in output)
+
+
+def test_cli_requires_confirmation_before_deleting_workout(client):
+    workout = client.post("/workouts", json={"name": "Keep this workout"}).json
+    answers = iter(["4", str(workout["id"]), "n", "0"])
+    output = []
+
+    def transport(method, path, payload):
+        response = client.open(path, method=method, json=payload)
+        return response.status_code, response.get_json()
+
+    run_cli(
+        api=ApiClient(transport=transport),
+        input_fn=lambda _prompt: next(answers),
+        output_fn=output.append,
+    )
+
+    assert client.get(f"/workouts/{workout['id']}").status_code == 200
+    assert "Delete cancelled." in output
