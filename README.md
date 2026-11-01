@@ -25,7 +25,63 @@ After changing the models, create a migration with
 and apply it with `pipenv run flask --app server.app db upgrade`.
 
 The seed command resets the database and inserts example workouts, exercises,
-and their associations. Re-running it is safe.
+and their associations. Re-running it is safe, but it also deletes all user
+accounts; run the admin bootstrap command again afterward if needed.
+
+## Authentication and authorization
+
+Set a persistent, high-entropy signing key before running the API in production:
+
+```bash
+export JWT_SECRET_KEY="replace-with-a-long-random-secret"
+```
+
+If `JWT_SECRET_KEY` is not set, the app generates an ephemeral key at startup;
+tokens then stop working when the process restarts. Never use that fallback in
+production.
+
+All workout and exercise endpoints require an access token. New accounts can be
+registered as standard users:
+
+```bash
+curl -X POST http://127.0.0.1:5555/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"runner1","password":"a-long-unique-password"}'
+```
+
+Passwords must be at least 12 characters and are stored as password hashes.
+Registration never grants administrator privileges. After applying migrations,
+create the initial admin with the requested local-development credentials:
+
+```bash
+pipenv run flask --app server.app create-admin
+```
+
+This creates username `admin` with password `admin101`. That password is
+intentionally weak and must only be used for local demonstrations. For any
+shared or deployed environment, set unique credentials before running the
+command:
+
+```bash
+export ADMIN_USERNAME="admin"
+export ADMIN_PASSWORD="replace-with-a-long-unique-password"
+pipenv run flask --app server.app create-admin
+```
+
+This command is idempotent for an existing admin account and will not promote a
+standard account. Sign in to obtain a one-hour JWT bearer token:
+
+```bash
+curl -X POST http://127.0.0.1:5555/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"runner1","password":"a-long-unique-password"}'
+```
+
+Send the returned `access_token` in the `Authorization: Bearer <token>` header.
+`GET /auth/me` returns the authenticated account. Standard users can read
+workouts and exercises; admins have full read, create, and delete access,
+including adding exercises to workouts. Clients should discard tokens when
+signing out; there is no server-side token revocation.
 
 ## Run the API
 
@@ -47,8 +103,9 @@ pipenv run python -m server.cli
 The CLI guides you through listing, viewing, creating, and deleting workouts
 and exercises, and adding exercises to workouts with either sets and reps or a
 duration. It shows available records before asking you to select one and asks
-for confirmation before deletion. API validation messages are shown in the
-terminal.
+for confirmation before deletion. At startup, choose **Sign up** to create a
+standard account or **Log in** to use an existing account. It then sends
+authenticated requests. API validation messages are shown in the terminal.
 
 To connect to an API running at a different address, set `WORKOUT_API_URL` or
 pass `--base-url`:
@@ -61,6 +118,9 @@ pipenv run python -m server.cli --base-url http://127.0.0.1:5555
 
 | Method | Path | Description |
 | --- | --- | --- |
+| POST | `/auth/register` | Register a standard user with a username and password. |
+| POST | `/auth/login` | Exchange credentials for a one-hour bearer token. |
+| GET | `/auth/me` | Retrieve the authenticated account. |
 | GET | `/workouts` | List workouts and their exercise prescriptions. |
 | GET | `/workouts/<id>` | Retrieve one workout and its exercise prescriptions. |
 | POST | `/workouts` | Create a workout with `name` and optional `description`. |

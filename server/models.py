@@ -1,9 +1,40 @@
 from sqlalchemy import CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import validates
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 db = SQLAlchemy()
+
+
+class User(db.Model):
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('user', 'admin')",
+            name="ck_users_role",
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), nullable=False, unique=True)
+    password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="user")
+
+    @validates("username")
+    def validate_username(self, _key, value):
+        if not isinstance(value, str):
+            raise ValueError("Username must be a string.")
+        value = value.strip().lower()
+        if not value or len(value) > 80:
+            raise ValueError("Username must contain 1 to 80 characters.")
+        return value
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 
 class Workout(db.Model):
